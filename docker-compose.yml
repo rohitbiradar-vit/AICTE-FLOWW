@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: flowguard_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: aicte_flowguard
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: flowguard_secret_change_in_production
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aicte_flowguard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: flowguard_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql+pg8000://postgres:flowguard_secret_change_in_production@db:5432/aicte_flowguard
+      - JWT_SECRET=production-secret-must-be-rotated-sih26262-secure
+      - STORAGE_DIR=/app/storage/documents
+    ports:
+      - "8000:8000"
+    volumes:
+      - document_storage:/app/storage/documents
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: flowguard_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:
+  document_storage:
